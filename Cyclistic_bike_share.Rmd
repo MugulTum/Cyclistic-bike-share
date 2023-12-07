@@ -1,0 +1,232 @@
+---
+title: "Cyclistic bike-share"
+author: "Silvester Cheptumo"
+date: "2023-12-06"
+output: html_document
+---
+
+
+
+
+
+```{r}
+suppressWarnings({
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(forcats)
+})
+```
+
+```{r}
+divvy4 <- read.csv("divvy-202004-tripdata.csv")
+divvy5 <- read.csv("divvy-202005-tripdata.csv")
+divvy6 <- read.csv("divvy-202006-tripdata.csv")
+divvy7 <- read.csv("divvy-202007-tripdata.csv")
+divvy8 <- read.csv("divvy-202008-tripdata.csv")
+divvy9 <- read.csv("divvy-202009-tripdata.csv")
+divvy10 <- read.csv("divvy-202010-tripdata.csv")
+divvy11 <- read.csv("divvy-202011-tripdata.csv")
+divvy12 <- read.csv("divvy-202012-tripdata.csv")
+divvy01 <- read.csv("divvy-202101-tripdata.csv")
+divvy02 <- read.csv("divvy-202102-tripdata.csv")
+divvy03 <-  read.csv("divvy-202103-tripdata.csv")
+```
+
+### merging the six datasets
+```{r}
+divvy_merged <- rbind(divvy4,divvy5,divvy6,divvy7,divvy8,divvy9,divvy10, divvy11, divvy12, divvy01, divvy02, divvy03)
+str(divvy_merged)
+```
+The resulting dataset has 13 columns and more than 3 million rows. Of these columns, we will, only be needing a few of them. 
+
+```{r}
+#selecting the columns to use
+divvy_df <- divvy_merged %>%
+  select(rideable_type, start_station_name, end_station_name, member_casual, started_at, ended_at)
+```
+
+check for missing values 
+```{r}
+colSums(is.na(divvy_df))
+```
+Since there are no missing values, we proceed to create new columns from the started_at and ended_at columns
+
+```{r}
+#converting dates from character to date format and finding the cycling duration
+divvy_df$started_at <- ymd_hms(divvy_df$started_at) #ymd_hms is a function in lubridate library
+divvy_df$ended_at <- ymd_hms(divvy_df$ended_at)
+```
+
+Extract cycling_time in minutes
+```{r}
+divvy_df <- divvy_df %>%
+  mutate(cycling_time = ended_at - started_at) %>%
+  mutate(cycling_time_minutes = as.numeric(round(cycling_time/60, digits=2)))
+```
+
+Extract hours from start time
+```{r}
+divvy_df <- divvy_df %>%
+  mutate(start_hour = format(started_at, "%H"))
+str(divvy_df)
+```
+
+Extracting month-year from start time
+```{r}
+# Extract the month and year from the start time
+divvy_df <- divvy_df %>%
+  mutate(Month_year = format(started_at, "%Y-%m"))
+```
+
+```{r}
+str(divvy_df)
+```
+
+
+### Exploratory Data Analysis
+```{r}
+
+member_type <- table(divvy_df$member_casual)
+percentages <- prop.table(member_type) * 100
+
+# Convert data to a data frame
+pie_data <- data.frame(member_type = names(member_type), percentage = percentages)
+
+# Create a pie chart using ggplot2
+ggplot(pie_data, aes(x = "", y = percentages, fill = member_type)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar("y") +
+  labs(title = "Member Types Pie Chart", fill = "Member Type") +
+  theme_minimal() +
+  theme(legend.position = "bottom") +
+  geom_text(aes(label = sprintf("%.1f%%", percentages)), position = position_stack(vjust = 0.5)) +
+  scale_fill_manual(values = c("blue", "orange"))
+```
+The pie chart above shows that casuals constitute 41% while members constitute 59%. 
+
+
+```{r}
+rideable_counts <- table(divvy_df$rideable_type)
+#creating a bar chart from ggplot for the rideable_types
+ggplot(data = data.frame(rideable_type = names(rideable_counts), count = as.numeric(rideable_counts)),
+       aes(x = rideable_type, y = count)) +
+  geom_bar(stat = "identity", fill = "skyblue", color = "black") +
+  labs(title = "Rideable Types Bar Chart", x = "Rideable Type", y = "Count") +
+  theme_minimal()
+  
+```
+The barchart shows that the docked_bikes, electric_bikes and classic_bikes are preferred in that order. 
+
+```{r}
+ggplot(data = divvy_df, aes(x = member_casual, y = cycling_time_minutes, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
+  labs(title = "Bar Plot of Cycling Duration by Member Type",
+       x = "Member Type", y = "Cycling Duration (minutes)") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "orange"))
+```
+
+
+Let us  now look at the peak hours that the member and casuals use the bikes
+```{r}
+# Group by hour and ride category, count the number of rides
+peak_hours <- divvy_df %>%
+  group_by(start_hour, member_casual) %>%
+  summarize(ride_count = n())
+
+# Create a plot to visualize the peak usage hours for each group
+ggplot(peak_hours, aes(x = start_hour, y = ride_count, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
+  labs(title = "Peak Usage Hours for Annual Members and Casual Riders",
+       x = "Cycling start hours", y = "Ride Count") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "orange"))
+```
+
+### seasonality/trends of the rides
+```{r}
+# Group by month_year, ride category, and count the number of rides
+monthly_trends <- divvy_df %>%
+  group_by(Month_year, member_casual) %>%
+  summarize(ride_count = n())
+
+# Create a plot to visualize the seasonal or monthly trends for each group
+ggplot(monthly_trends, aes(x = Month_year, y = ride_count, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
+  labs(title = "Seasonal or Monthly Trends for Annual Members and Casual Riders",
+       x = "Month_Year", y = "Ride Count") +
+  theme_minimal() +
+  scale_x_discrete(labels = scales::date_format("%Y-%m")) +
+  scale_fill_manual(values = c("blue", "orange"))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+ 
+```
+
+
+Popular start stations by membership type
+```{r}
+# Group by start and end stations, count the number of rides for each group
+popular_start_routes <- divvy_df %>%
+  filter(!is.na(start_station_name) & start_station_name != "") %>% # remove rows with empty start_station
+  group_by(member_casual, start_station_name) %>%
+  summarize(route_count = n()) %>%
+  arrange(member_casual, desc(route_count)) %>%
+  top_n(5, wt = route_count)
+popular_start_routes
+
+# Create a bar plot to visualize the top 5 start stations for each group
+ggplot(popular_start_routes, aes(x = fct_reorder(start_station_name, route_count), y = route_count, fill = member_casual)) +
+  geom_col(position = "dodge", alpha = 0.7) +
+  labs(title = "Top 5 start Stations for Annual Members and Casual Riders",
+       x = "End Station", y = "Ride Count") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "orange")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+```
+The popular start stations for casuals is Streeter Dr & Grand Ave while the popular start station for member is Clark St & Elm St. 
+
+popular end stations
+```{r}
+# Group by end stations, count the number of rides for each group
+popular_end_routes <- divvy_df %>%
+  filter(!is.na(end_station_name) & end_station_name != "") %>%  # remove rows with empty end station
+  group_by(member_casual, end_station_name) %>%
+  summarize(route_count = n()) %>%
+  arrange(member_casual, desc(route_count)) %>%
+   top_n(5, wt = route_count)
+popular_end_routes
+
+# Create a bar plot to visualize the top 5 end stations for each group
+ggplot(popular_end_routes, aes(x = fct_reorder(end_station_name, route_count), y = route_count, fill = member_casual)) +
+  geom_col(position = "dodge", alpha = 0.7) +
+  labs(title = "Top 5 End Stations for Annual Members and Casual Riders",
+       x = "End Station", y = "Ride Count") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "orange")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for better readability
+```
+
+The bar plot shows that the top end station for casuals is Streeter Dr & Grand Ave while for members, their popular end station is Clark St & Elm St. 
+
+Checking how the various rideable types are popular among the customers
+
+```{r}
+# Create a table of rideable types by member_casual
+rideable_by_member <- as.data.frame(table(divvy_df$rideable_type, divvy_df$member_casual))
+
+# Rename the columns to 'rideable_type', 'member_casual', and 'count'
+colnames(rideable_by_member) <- c('rideable_type', 'member_casual', 'count')
+
+# Create a bar plot
+ggplot(rideable_by_member, aes(x = rideable_type, y = count, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Distribution of Rideable Types by Member Type",
+       x = "Rideable Type", y = "Count") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "orange"))
+```
+The bar chart above shows that docked_bike is the most popular bike among both membership types. 
+
+
