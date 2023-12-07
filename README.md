@@ -31,6 +31,7 @@ In this section, I created a pipeline for selecting only 6 columns that are rele
 * start_hour for the time that the riders started cycling
 * Month_year for the specific month and year that the riders cycled. 
 ## Summary of the analysis
+[My code] (https://github.com/MugulTum/Cyclistic-bike-share/blob/main/Cyclistic_bike_share.docx)
 For the 12 months under analysis:
 
 1. Annual members used Cyclistic bikes more than casuals
